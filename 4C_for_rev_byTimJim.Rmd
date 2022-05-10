@@ -1,0 +1,1208 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+# install.packages('rstatix')
+# install.packages('ggpubr')
+# install.packages('cutpointr')
+# install.packages('pbkrtest')
+# install.packages('DescTools')
+# install.packages('lmerTest')
+library(mice)
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(boot)
+library(gtools)
+library(rms)
+library(plyr)
+library(readr)
+library(hash)
+library(reshape2)
+library(rstatix)
+library(ggpubr)
+library(dplyr)
+library(lme4)
+library(ggeffects)
+library(ggnewscale)
+library(cutpointr)
+library(pbkrtest)
+library(ggridges)
+library(DescTools)
+library(gridExtra)
+library(lmerTest)
+```
+
+```{r}
+setwd('/Users/ximengwang/Desktop')
+```
+
+```{r}
+mydir = '/Users/ximengwang/Desktop/lumc_24_vars'
+lei_vars = list.files(path = mydir, pattern="*.csv", full.names=TRUE)
+
+bun_lborres = read_csv(lei_vars[1])
+crp_lborres = read_csv(lei_vars[2])
+lymp_lborres = read_csv(lei_vars[3])
+oxy_vsorres = read_csv(lei_vars[4])
+oxy_vsorresu = read_csv(lei_vars[5])
+rr_vsorres = read_csv(lei_vars[6])
+```
+
+```{r}
+mydir_2 = '/Users/ximengwang/Desktop/haga_24_vars'
+haga_vars = list.files(path = mydir_2, pattern="*.csv", full.names=TRUE)
+
+bun_lborres_h = read_csv(haga_vars[1])
+crp_lborres_h = read_csv(haga_vars[2])
+lymp_lborres_h = read_csv(haga_vars[3])
+oxy_vsorres_h = read_csv(haga_vars[4])
+oxy_vsorresu_h = read_csv(haga_vars[5])
+rr_vsorres_h = read_csv(haga_vars[6])
+```
+
+```{r}
+mydir_3 = '/Users/ximengwang/Desktop/lumc_24_rev_vars'
+lei_rev_vars = list.files(path = mydir_3, pattern="*.csv", full.names=TRUE)
+
+bun_lborres_rev = read_csv(lei_rev_vars[1])
+crp_lborres_rev = read_csv(lei_rev_vars[2])
+lymp_lborres_rev = read_csv(lei_rev_vars[3])
+oxy_vsorres_rev = read_csv(lei_rev_vars[4])
+oxy_vsorresu_rev = read_csv(lei_rev_vars[5])
+rr_vsorres_rev = read_csv(lei_rev_vars[6])
+```
+
+```{r}
+mydir_4 = '/Users/ximengwang/Desktop/haga_24_rev_vars'
+haga_rev_vars = list.files(path = mydir_4, pattern="*.csv", full.names=TRUE)
+
+bun_lborres_rev_h = read_csv(haga_rev_vars[1])
+crp_lborres_rev_h = read_csv(haga_rev_vars[2])
+lymp_lborres_rev_h = read_csv(haga_rev_vars[3])
+oxy_vsorres_rev_h = read_csv(haga_rev_vars[4])
+oxy_vsorresu_rev_h = read_csv(haga_rev_vars[5])
+rr_vsorres_rev_h = read_csv(haga_rev_vars[6])
+```
+
+```{r}
+mice_imputation <- function(dataset, iterations, no_imputations) {
+  data_imp <- mice(dataset, maxit=iterations, seed=121212, m=no_imputations,
+                   remove.collinear = FALSE, print = FALSE)
+  return(data_imp)
+}
+
+sort_mi_data <- function(mi_data){
+  sorted_mi_data <- data.frame()
+  
+  aggregated_data <- aggregate(subset(mi_data, select = -c(pseudo_id)), list(mi_data$pseudo_id), mean)
+  sorted_mi_data <- aggregated_data
+  names(sorted_mi_data)[names(sorted_mi_data) == 'Group.1'] <- 'pseudo_id'
+  
+  sorted_mi_data <- subset(sorted_mi_data, select = -c(.id,.imp))
+  return(sorted_mi_data)
+}
+
+mice_sort_combined <- function(dataset, iterations, no_imputations){
+  imp <- mice_imputation(dataset, iterations, no_imputations)
+  imp <- complete(imp, 'long')
+  # print(imp)
+  sorted_imp <- sort_mi_data(imp)
+  
+  return(sorted_imp)
+}
+```
+
+```{r}
+bun_lborres_imp = mice_sort_combined(bun_lborres[,1:11], 10, 10)
+crp_lborres_imp = mice_sort_combined(crp_lborres[,1:11], 10, 10)
+lymp_lborres_imp = mice_sort_combined(lymp_lborres[,1:11], 10, 10)
+rr_vsorres_imp = mice_sort_combined(rr_vsorres[,1:11], 10, 10)
+oxy_vsorres_imp = mice_sort_combined(oxy_vsorres[,1:11], 10, 10)
+
+bun_lborres_imp_h = mice_sort_combined(bun_lborres_h[,1:11], 10, 10)
+crp_lborres_imp_h = mice_sort_combined(crp_lborres_h[,1:11], 10, 10)
+lymp_lborres_imp_h = mice_sort_combined(lymp_lborres_h[,1:11], 10, 10)
+rr_vsorres_imp_h = mice_sort_combined(rr_vsorres_h[,1:11], 10, 10)
+oxy_vsorres_imp_h = mice_sort_combined(oxy_vsorres_h[,1:11], 10, 10)
+
+bun_lborres_rev_imp = mice_sort_combined(bun_lborres_rev[,1:11], 10, 10)
+crp_lborres_rev_imp = mice_sort_combined(crp_lborres_rev[,1:11], 10, 10)
+lymp_lborres_rev_imp = mice_sort_combined(lymp_lborres_rev[,1:11], 10, 10)
+rr_vsorres_rev_imp = mice_sort_combined(rr_vsorres_rev[,1:11], 10, 10)
+oxy_vsorres_rev_imp = mice_sort_combined(oxy_vsorres_rev[,1:11], 10, 10)
+
+bun_lborres_rev_imp_h = mice_sort_combined(bun_lborres_rev_h[,1:11], 10, 10)
+crp_lborres_rev_imp_h = mice_sort_combined(crp_lborres_rev_h[,1:11], 10, 10)
+lymp_lborres_rev_imp_h = mice_sort_combined(lymp_lborres_rev_h[,1:11], 10, 10)
+rr_vsorres_rev_imp_h = mice_sort_combined(rr_vsorres_rev_h[,1:11], 10, 10)
+oxy_vsorres_rev_imp_h = mice_sort_combined(oxy_vsorres_rev_h[,1:11], 10, 10)
+```
+
+```{r}
+after_imp_plots <- function(imp, name){
+  png(paste0(name,"_density.png"), width = 2000, height = 1000)
+  print(densityplot(imp))
+  dev.off()
+  
+  pdf(file = paste0(name,"_iterations.pdf"))
+  print(plot(imp))
+  dev.off()
+}
+```
+
+```{r}
+bun_imp <- mice_imputation(bun_lborres[,1:11], 10, 10) 
+# plot(bun_imp)
+after_imp_plots(bun_imp, 'lumc_bun')
+```
+
+```{r}
+mk_dict_4C <- function(data_list){
+  data_dict <- hash()
+  
+  name_list = c('bun_lborres', 'crp_lborres', 'lymp_lborres', 'rr_vsorres', 
+                'oxy_vsorres', 'oxy_vsorresu')
+  
+  for(col in colnames(data_list[[1]])[c(-1)]){
+    print(col)
+    lst <- list()
+    
+    for(i in 1: length(data_list)){
+      name <- name_list[i]
+      # print(name)
+   
+      data_sub <- subset(data_list[[i]], select = c('pseudo_id', col))
+      colnames(data_sub) <- c('pseudo_id', name)
+      lst[[length(lst) + 1]] <- data_sub
+    }
+    
+    lst <- lst %>%  reduce(inner_join, by = "pseudo_id")
+    data_dict[[col]] <- lst
+  }  
+  
+  return(data_dict)  
+}
+```
+
+```{r}
+lumc_data_list <- list(bun_lborres_imp, crp_lborres_imp, lymp_lborres_imp, rr_vsorres_imp,
+                      oxy_vsorres_imp, oxy_vsorresu)
+lumc_data_dict <- mk_dict_4C(lumc_data_list)
+```
+
+```{r}
+haga_data_list <- list(bun_lborres_imp_h, crp_lborres_imp_h, lymp_lborres_imp_h, rr_vsorres_imp_h,
+                      oxy_vsorres_imp_h, oxy_vsorresu_h)
+haga_data_dict <- mk_dict_4C(haga_data_list)
+```
+
+```{r}
+lumc_data_rev_list <- list(bun_lborres_rev_imp, crp_lborres_rev_imp, lymp_lborres_rev_imp, rr_vsorres_rev_imp, oxy_vsorres_rev_imp, oxy_vsorresu_rev)
+
+lumc_data_rev_dict <- mk_dict_4C(lumc_data_rev_list)
+```
+
+```{r}
+haga_data_rev_list <- list(bun_lborres_rev_imp_h, crp_lborres_rev_imp_h, lymp_lborres_rev_imp_h,   rr_vsorres_rev_imp_h, oxy_vsorres_rev_imp_h, oxy_vsorresu_rev_h)
+
+haga_data_rev_dict <- mk_dict_4C(haga_data_rev_list)
+```
+
+```{r}
+# lei_stat <- read_csv("~/Desktop/Stats_comb/lei_stats_comb.csv")
+# haga_stat <- read_csv("~/Desktop/Stats_comb/haga_stats_comb.csv")
+
+lumc_stat <- read_csv("~/Desktop/Stats_comb/lumc_stats_small.csv")
+haga_stat <- read_csv("~/Desktop/Stats_comb/haga_stats_small.csv")
+
+
+add_age_sex_comb <- function(data, hospital){
+  if(hospital == 'lumc'){
+    stats = lei_stat
+  }
+  else if(hospital == 'haga'){
+    stats = haga_stat
+  }
+  stats_sub = subset(stats, select = c('pseudo_id', 'sex', 'age', 'deteriorate'))
+  data <- left_join(data, stats_sub, by = 'pseudo_id')
+  return(data)
+}
+
+add_oxy_supply <- function(data_line){
+   data_line <- as.list(data_line)
+   data_line$oxy_vsorresu <- trimws(data_line$oxy_vsorresu, which = c('left'))
+   
+   if(is.na(data_line$oxy_vsorresu)){
+     data_line$oxy_vsorresu <- 0
+   }
+   
+   if(data_line$oxy_vsorresu == 0){
+     data_line$oxy_vsorresu <- 'Room air'
+   }
+   else if(data_line$oxy_vsorresu > 0){
+     data_line$oxy_vsorresu <- 'Oxygen'
+   }
+  return(data_line)
+}
+
+```
+```{r}
+for(key in keys(lumc_data_dict)){
+  lumc_data_dict[[key]] <- add_age_sex_comb(lumc_data_dict[[key]], 'lumc')
+  lumc_data_dict[[key]] <- apply(lumc_data_dict[[key]], 1, add_oxy_supply)
+  lumc_data_dict[[key]] <- rbindlist(Map(as.data.frame, lumc_data_dict[[key]]))
+}
+
+for(key in keys(haga_data_dict)){
+  haga_data_dict[[key]] <- add_age_sex_comb(haga_data_dict[[key]], 'haga')
+  haga_data_dict[[key]] <- apply(haga_data_dict[[key]], 1, add_oxy_supply)
+  haga_data_dict[[key]] <- rbindlist(Map(as.data.frame, haga_data_dict[[key]]))
+}
+
+for(key in keys(lumc_data_rev_dict)){
+  lumc_data_rev_dict[[key]] <- add_age_sex_comb(lumc_data_rev_dict[[key]], 'lumc')
+  lumc_data_rev_dict[[key]] <- apply(lumc_data_rev_dict[[key]], 1, add_oxy_supply)
+  lumc_data_rev_dict[[key]] <- rbindlist(Map(as.data.frame, lumc_data_rev_dict[[key]]))
+}
+
+for(key in keys(haga_data_rev_dict)){
+  haga_data_rev_dict[[key]] <- add_age_sex_comb(haga_data_rev_dict[[key]], 'haga')
+  haga_data_rev_dict[[key]] <- apply(haga_data_rev_dict[[key]], 1, add_oxy_supply)
+  haga_data_rev_dict[[key]] <- rbindlist(Map(as.data.frame, haga_data_rev_dict[[key]]))
+}
+```
+
+```{r}
+cal_score_row <- function(row){
+  row <- as.list(row)
+  
+  age = as.numeric(row$age)
+  sex = row$sex
+  rr_vsorres = as.numeric(row$rr_vsorres)
+  oxy_vsorres = as.numeric(row$oxy_vsorres)
+  oxy_vsorresu = row$oxy_vsorresu
+  crp_lborres = as.numeric(row$crp_lborres)
+  lymp_lborres = as.numeric(row$lymp_lborres)
+  bun_lborres = as.numeric(row$bun_lborres)
+  
+  row$total_score = inv.logit(4.0334421 + 0.015905387 * age - 4.3432543e-06 * pmax(age-38.512329, 0)^3                     + 4.2729524e-05 * pmax(age-67.726027, 0)^3 - 7.1363657e-05 *pmax(age-81.145205,0)^3                     + 3.2977387e-05 * pmax(age-92.917808, 0)^3 +
+                    0.24389114 * (sex == "M") -
+                    0.014530821 * rr_vsorres + 0.0013586387 * pmax(rr_vsorres-16,0)^3 -
+                    0.0024433814 * pmax(rr_vsorres-19, 0)^3 + 0.0011884195 * pmax(rr_vsorres-24, 0)^3 -
+                    0.00010367674 * pmax(rr_vsorres-37, 0)^3 - 0.070657966 * oxy_vsorres -
+                    9.6831023e-05 * pmax(oxy_vsorres-84, 0)^3 + 0.003999869 * pmax(oxy_vsorres-94,0)^3                     - 0.0056124794 * pmax(oxy_vsorres-96, 0)^3 + 
+                    0.0017094414 * pmax(oxy_vsorres-100,0)^3 +
+                    0.74504819 * (oxy_vsorresu=="Oxygen")  +
+                    0.050848662 * bun_lborres + 0.00087038101 * pmax(bun_lborres-2.9, 0)^3 -
+                    0.002025421 * pmax(bun_lborres-5.7, 0)^3 +
+                    0.0012535414 * pmax(bun_lborres-9.2, 0)^3 -
+                    9.8501415e-05 * pmax(bun_lborres-25.5, 0)^3 +
+                    0.0097230673 * crp_lborres - 4.6380195e-07 * pmax(crp_lborres-5, 0)^3 +
+                    6.8990377e-07 * pmax(crp_lborres-45, 0)^3 -
+                    2.0883468e-07 * pmax(crp_lborres-113, 0)^3 -
+                    1.7267141e-08 * pmax(crp_lborres-297, 0)^3- 
+                    0.45640253 * lymp_lborres + 0.16573679 * pmax(lymp_lborres-0.3, 0)^3 -
+                    0.18396421 * pmax(lymp_lborres-0.7, 0)^3 -
+                    0.027160075 * pmax(lymp_lborres-1.1, 0)^3 +
+                    0.045387497 * pmax(lymp_lborres-2.4, 0)^3
+  )
+  return(row)
+}
+```
+
+```{r}
+cal_det_score <- function(data_dict){
+  for(key in keys(data_dict)){
+    data_dict[[key]] <- apply(data_dict[[key]], 1, cal_score_row)
+    data_dict[[key]] <- rbindlist(Map(as.data.frame, data_dict[[key]]))
+  }
+}
+
+cal_det_score(lumc_data_dict)
+cal_det_score(haga_data_dict)
+cal_det_score(lumc_data_rev_dict)
+cal_det_score(haga_data_rev_dict)
+```
+
+```{r}
+mk_patient_n <- function(hospital){
+  # patient_n <- data.frame(matrix(ncol = 3, nrow = 0))
+  # x <- c('time', 'count', 'deteriorate')
+  # colnames(patient_n) <- x
+  patient_n <- data.frame(time= character(), count= numeric(), deteriorate = numeric(),
+                          stringsAsFactors = F)
+  
+  if(hospital == 'lumc'){
+    stats = lumc_stat
+  }
+  else if(hospital == 'haga'){
+    stats = haga_stat
+  }
+  
+  for(i in (seq(0,9,1))){
+    time <- paste0('time24_',i)
+
+    det_count <- length(unique(subset(stats, outcome_day >= i & 
+                                                   deteriorate ==1)$pseudo_id))
+    no_det_count <-  length(unique(subset(stats, outcome_day >= i & 
+                                                      deteriorate == 0)$pseudo_id))
+    
+    print(paste0('Total: ', length(unique(subset(stats, outcome_day >= i)$pseudo_id))))
+    print(paste0('Det: ', det_count))
+    print(paste0('No-det: ', no_det_count))
+    
+    row_1 = c(time, det_count, 1)
+    row_2 = c(time, no_det_count, 0)
+    
+    patient_n[nrow(patient_n) + 1, ] <- row_1
+    patient_n[nrow(patient_n) + 1, ] <- row_2
+  }
+  
+  patient_n$count <- as.numeric(patient_n$count)
+  patient_n$deteriorate <- as.factor(patient_n$deteriorate)
+
+  return(patient_n)
+}
+```
+
+```{r}
+lumc_patient_n <- mk_patient_n('lumc')
+lumc_patient_n
+```
+
+```{r}
+haga_patient_n <- mk_patient_n('haga')
+haga_patient_n
+```
+
+```{r}
+color_grps <- list(no_deteriorate = 'royalblue', deteriorate = 'orange2')
+```
+
+```{r}
+plot_patient_n <- function(patient_n, for_rev, font_face){
+  hospital <- strsplit(deparse(substitute(patient_n)),'_',3)[[1]][1]
+  if(hospital == 'haga'){
+    hospital <- 'Haga'
+  }
+  else if(hospital == 'lumc'){
+     hospital <- 'LUMC'
+  }
+  
+  if(for_rev == 'for'){
+    dir <- 'forward'
+    lim = NULL
+  }
+  else if(for_rev == 'rev'){
+    dir <- 'reverse'
+    lim = rev
+  }
+  
+  bar_plot <- ggplot(data = patient_n, aes(fill = fct_rev(deteriorate), y = count, x = time))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(name = 'deteriorate',
+                    values=c(color_grps[['deteriorate']], color_grps[['no_deteriorate']]))+
+  geom_text(aes(label= count, fontface = font_face), position = position_stack(vjust = .5), size = 3.5)+
+  scale_x_discrete(limits = lim)+
+  ggtitle(paste(hospital, dir))+
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = font_face), 
+        axis.title.x = element_text(size = 14, face = font_face),
+        axis.title.y = element_text(size = 14, face = font_face),
+        axis.text.x = element_text(size = 9,  angle = 20, vjust = 0.5, face = font_face),
+        axis.text.y = element_text(size = 12, face = font_face),
+        legend.title = element_text(size = 10, face = font_face),
+        legend.text = element_text(size = 10, face = font_face)
+        )
+  plot(bar_plot)
+  ggsave(paste0(hospital, '_',dir,'.png'), dpi = 300, height = 3, width = 8)
+}
+```
+
+```{r}
+plot_patient_n(lumc_patient_n, 'for', 'plain')
+```
+
+```{r}
+plot_patient_n(lumc_patient_n, 'rev', 'plain')
+```
+
+```{r}
+plot_patient_n(haga_patient_n, 'for', 'plain')
+```
+
+```{r}
+plot_patient_n(haga_patient_n, 'rev', 'plain')
+```
+
+```{r}
+boxplot_det_score <- function(data_dict, if_log){
+  hospital <- toupper(strsplit(deparse(substitute(data_dict)), '_', 2)[[1]][1])
+  
+  if(grepl('rev', deparse(substitute(data_dict)))){
+    time_order <- '(reverse)'
+  }
+  else{
+    time_order <- '(forwarding)'
+  }
+  
+  time_list <- as.list(seq(0,9,1))
+  
+  data_lst <- list()
+   
+  for(time in time_list){
+    if(if_log == 'no_log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'total_score', 'deteriorate'))
+    }
+    else if(if_log == 'log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'log_score', 'deteriorate'))
+    }
+    colnames(data_sub) <- c('pseudo_id', paste0('time24_',time), 'deteriorate')
+    data_lst[[length(data_lst) + 1]] <- data_sub
+  }
+  data_score <- data_lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+  
+  data_score$deteriorate <- as.character(data_score$deteriorate)
+  
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'),
+                         variable.name = 'time', value.name = 'score')
+  
+  if(grepl('rev', deparse(substitute(data_dict)))){
+    boxplot<- ggplot(data = data_score, aes(x = time, y = score, color = deteriorate))+
+      geom_boxplot()+
+      ggtitle(paste0('4C Deterioration Scores (', if_log, ') - ', hospital, ' ', time_order))+
+      scale_color_manual(name = 'deteriorate',
+                         values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+      scale_x_discrete(limits = rev)+
+      theme(plot.title = element_text(hjust = 0.5, size = 12), axis.title.x = element_text(size = 8),
+            axis.title.y = element_text(size = 8), legend.key.size = unit(0.6, 'cm'),
+            legend.title = element_text(size=8))
+  }
+  else{
+    boxplot<- ggplot(data = data_score, aes(x = time, y = score, color = deteriorate))+
+      geom_boxplot()+
+      ggtitle(paste0('4C Deterioration Scores (', if_log, ') - ', hospital, ' ', time_order))+
+      scale_color_manual(name = 'deteriorate',
+                         values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+      theme(plot.title = element_text(hjust = 0.5, size = 12), axis.title.x = element_text(size = 8),
+            axis.title.y = element_text(size = 8), legend.key.size = unit(0.6, 'cm'),
+            legend.title = element_text(size=8))
+  }
+  plot(boxplot)
+  
+}
+```
+
+```{r}
+boxplot_det_score(lumc_data_dict, 'no_log')
+```
+
+```{r}
+boxplot_det_score(lumc_data_rev_dict, 'no_log')
+```
+
+```{r}
+boxplot_det_score(haga_data_dict, 'no_log')
+```
+
+```{r}
+boxplot_det_score(haga_data_rev_dict, 'no_log')
+```
+
+```{r}
+boxplot_det_score(haga_data_rev_dict, 'no_log')
+```
+
+```{r}
+F_test_forward <- function(data_dict, if_log){
+  time_list <- as.list(seq(0,9,1))
+  lst <- list()
+  
+  for(time in time_list){
+    data = data_dict[[paste0('time24_',time)]]
+    if(if_log == 'no_log'){
+      ftest <- var.test(total_score ~ deteriorate, data = data)
+    }
+    else if(if_log == 'log'){
+      ftest <- var.test(log_score ~ deteriorate, data = data)
+    }
+  
+    lst[[length(lst) + 1]] <- ftest
+  }
+  
+  return(lst)                    
+}
+```
+
+```{r}
+lumc_ftest_for <- F_test_forward(lumc_data_dict, 'no_log')
+lumc_ftest_for
+```
+
+```{r}
+haga_ftest_for <- F_test_forward(haga_data_dict, 'no_log')
+haga_ftest_for
+```
+
+```{r}
+t_test_forward <- function(data_dict, if_log){
+   time_list <- as.list(seq(0,9,1))
+   t_test_stat <- data.frame(time = character(),  t_value = numeric(), p_value = numeric(),
+                          stringsAsFactors = F)
+   
+   for(time in time_list){
+    data = data_dict[[paste0('time24_',time)]]
+    time_stamp <- paste0('time24_',time)
+    
+    if(if_log == 'no_log'){
+      ttest <- t.test(total_score ~ deteriorate, data = data, var.equal = F)
+    }
+    else if(if_log == 'log'){
+      ttest <- t.test(log_score ~ deteriorate, data = data, var.equal = F)
+    }
+    
+    t_value <- ttest$statistic
+    p_value <- ttest$p.value
+    
+    row = c(time_stamp, t_value, p_value)
+    t_test_stat[nrow(t_test_stat) + 1, ] <- row
+  }
+  t_test_stat$t_value <- as.numeric(t_test_stat$t_value)
+  t_test_stat$p_value <- as.numeric(t_test_stat$p_value)
+   
+   
+  return(t_test_stat)
+}
+```
+
+```{r}
+lumc_ttest_for <- t_test_forward(lumc_data_dict, 'no_log')
+lumc_ttest_for
+```
+
+```{r}
+haga_ttest_for <- t_test_forward(haga_data_dict, 'no_log')
+haga_ttest_for
+```
+
+```{r}
+boxplot_ttest_score_for <- function(data_dict, if_log, font_face){
+  hospital <- strsplit(deparse(substitute(data_dict)), '_', 2)[[1]][1]
+  if(hospital == 'lumc'){
+    hospital <- 'LUMC'
+  }
+  else if(hospital == 'haga'){
+    hospital <- 'Haga'
+  }
+  
+  time_list <- as.list(seq(0,9,1))
+  
+  data_lst <- list()
+  anno_lst <- list()
+  
+  for(time in time_list){
+    if(if_log == 'no_log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'total_score', 'deteriorate'))
+      ttest <- t.test(total_score ~ deteriorate, data = data_sub, var.equal = F)
+    }
+    else if(if_log == 'log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'log_score', 'deteriorate'))
+      ttest <- t.test(log_score ~ deteriorate, data = data_sub, var.equal = F)
+    }
+    
+    time_stamp = paste0('time24_',time)
+    
+    anno_lst[['time']] <- append(anno_lst[['time']], time_stamp)
+    anno_lst[['label']] <- append(anno_lst[['label']], ttest$p.value)
+    
+    colnames(data_sub) <- c('pseudo_id',time_stamp, 'deteriorate')
+    data_lst[[length(data_lst) + 1]] <- data_sub
+  }
+  
+  anno_lst[["label"]] <- anno_lst[["label"]] %>% cut(.,breaks = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+                                         labels = c("****", "***", "**", "*", "ns")) %>% as.character
+  
+  data_score <- data_lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+  
+  data_score$deteriorate <- as.character(data_score$deteriorate)
+  
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'),
+                         variable.name = 'time', value.name = 'score')
+  
+  boxplot<- ggplot(data = data_score, aes(x = time, y = score, color = deteriorate))+
+    geom_boxplot()+
+    ggtitle(paste0('4C Deterioration Scores - ', hospital, ' (forward)'))+
+    scale_color_manual(name = 'deteriorate',
+                       values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = font_face), 
+          axis.title.x = element_text(size = 14, face = font_face),
+          axis.title.y = element_text(size = 14, face = font_face), legend.key.size = unit(0.6, 'cm'),
+          axis.text.x = element_text(size = 9.5, angle = 20, vjust = 0.5, face = font_face),
+          axis.text.y = element_text(size = 12, face = font_face),
+          legend.title = element_text(size= 10, face = font_face),
+          legend.text = element_text(size = 10, face = font_face))
+  
+  plot_annot<- boxplot + annotate('text', x= unique(data_score$time), y = 0.01, 
+                             label = anno_lst[["label"]], size = 4, fontface = font_face)
+  
+  ggsave(paste0(hospital, '_for','.png'), dpi = 300, height = 5, width = 8)
+  plot(plot_annot)
+  
+}
+```
+
+```{r}
+boxplot_ttest_score_for(lumc_data_dict, 'no_log', 'plain')
+```
+
+```{r}
+boxplot_ttest_score_for(haga_data_dict, 'no_log','plain')
+```
+
+```{r}
+time_list <- as.list(seq(0,9,1))
+lst <- list()
+
+for(time in time_list){
+    data_sub <- subset(lumc_data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'total_score', 'deteriorate'))
+    colnames(data_sub) <- c('pseudo_id', time, 'deteriorate')
+    lst[[length(lst) + 1]] <- data_sub
+}
+
+data_score <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+
+# data_score$deteriorate <- as.character(data_score$deteriorate)
+  
+data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'), 
+                   variable.name = 'time', value.name = 'score')
+
+data_score$time <- as.numeric(levels(data_score$time)[data_score$time])
+
+data_score
+```
+
+```{r}
+lumc.lmer <- lmer(score ~ time + deteriorate + (1|pseudo_id), data = data_score)
+summary(lumc.lmer)
+```
+
+```{r}
+boxplot_lm_score_rev <- function(data_dict, if_log, font_face){
+  hospital <- strsplit(deparse(substitute(data_dict)), '_', 2)[[1]][1]
+  
+  if(hospital == 'lumc'){
+    hospital <- 'LUMC'
+  }
+  else if(hospital == 'haga'){
+    hospital <- 'Haga'
+  }
+  
+  time_list <- as.list(seq(0,9,1))
+  lst <- list()
+  
+  for(time in time_list){
+    if(if_log == 'no_log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'total_score', 'deteriorate'))
+    }
+    else if(if_log == 'log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'log_score', 'deteriorate'))
+    }
+    
+    colnames(data_sub) <- c('pseudo_id', time, 'deteriorate')
+    lst[[length(lst) + 1]] <- data_sub
+  }
+
+  data_score <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+  # print(data_score)
+  
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'), 
+                   variable.name = 'time', value.name = 'score')
+
+  data_score$time <- as.numeric(levels(data_score$time)[data_score$time])
+  data_score$deteriorate <- as.factor(levels(data_score$deteriorate)[data_score$deteriorate])
+  
+  # print(data_score)
+  
+  lmm <- lmer(score ~ time * deteriorate + (1|pseudo_id), data = data_score)
+  # print(summary(lmm))
+  coefs <- subset(data.frame(coef(summary(lmm))), select = -c(df))
+  coefs$Estimate <- as.numeric(format(round(coefs$Estimate, 5), nsmall = 5))
+  coefs$Std..Error <- as.numeric(format(round(coefs$Std..Error, 5), nsmall = 5))
+  coefs$t.value <- as.numeric(format(round(coefs$t.value, 5), nsmall = 5))
+  coefs$Pr...t.. <- formatC(coefs$Pr...t.., format = "e", digits = 3)
+  # df.KR <- get_Lb_ddf(lmm, fixef(lmm))
+  # coefs$p.value <- format(2 * (1 - pnorm(abs(coefs$p.value))), nsmall = 8)
+  # options(digits=5)
+  # coefs$p.value <- as.numeric(coefs$p.value)
+  # coefs$Pr...t.. <-  sprintf(2 * (1 - pnorm(abs(coefs$Pr...t..))),  fmt = '%.8f')
+  print(coefs)
+
+  # png(paste0(hospital, '_rev_coefs','.png'), height = 100*nrow(coefs), 
+  #     width = 250*ncol(coefs), res = 200)
+  # grid.table(coefs)
+  # dev.off()
+  
+  pred.mm <- ggpredict(lmm, terms = c('time', 'deteriorate'))
+  # print(pred.mm$group)
+  
+  data_score$time <- paste0('time24_', data_score$time)
+  
+  boxplot<- ggplot(data = data_score, aes(x = time, y = score, color = as.factor(deteriorate)))+
+    geom_boxplot()+
+    geom_line(data= as.data.frame(pred.mm), aes(x = rev(x + 1), y = predicted, color =group, group = group))+
+    ggtitle(paste0('4C Deterioration Scores - ', hospital, ' (reverse)'))+
+    scale_color_manual(name = 'deteriorate',
+                       values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = font_face), 
+          axis.title.x = element_text(size = 14, face = font_face),
+          axis.title.y = element_text(size = 14, face = font_face), 
+          legend.key.size = unit(0.6, 'cm'),
+          axis.text.x = element_text(size = 9.5, angle = 20, vjust = 0.5, face = font_face),
+          axis.text.y = element_text(size = 12, face = font_face),
+          legend.title = element_text(size= 10, face = font_face),
+          legend.text = element_text(size = 10, face = font_face)) + 
+          scale_x_discrete(limits = rev)
+  
+  #ggsave(paste0(hospital, '_rev','.png'), dpi = 300, height = 5, width = 8)
+  plot(boxplot)
+  
+}
+```
+
+```{r}
+boxplot_lm_score_rev(lumc_data_rev_dict, 'no_log', 'plain')
+```
+
+```{r}
+boxplot_lm_score_rev(haga_data_rev_dict, 'no_log', 'plain')
+```
+
+```{r}
+opt_cutpoint <- function(data_dict){
+  time_list <- as.list(seq(0,9,1))
+  lst <- list()
+  
+  for(time in time_list){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                            'total_score', 'deteriorate'))
+      colnames(data_sub) <- c('pseudo_id', paste0(time), 'deteriorate')
+      lst[[length(lst) + 1]] <- data_sub
+  }
+  
+  data_score <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+    
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'), 
+                   variable.name = 'time', value.name = 'score')
+  
+  data_score$time <- as.numeric(levels(data_score$time)[data_score$time])
+  data_score$deteriorate <- as.factor(levels(data_score$deteriorate)[data_score$deteriorate])
+  
+  cp <- cutpointr(data_score, score, deteriorate, pos_class = '1', 
+                  neg_class = '0', method = maximize_metric, metric = F1_score)
+  
+  print(summary(cp))
+  plot(cp)
+  plot_metric(cp)
+}
+```
+
+```{r}
+opt_cutpoint(lumc_data_dict)
+```
+
+```{r}
+opt_cutpoint(haga_data_dict)
+```
+
+```{r}
+opt_cutpoint(lumc_data_rev_dict)
+```
+
+```{r}
+opt_cutpoint(haga_data_rev_dict)
+```
+
+```{r}
+log_transform <- function(data_dict){
+  time_list <- as.list(seq(0,9,1))
+  
+  for(time in time_list){
+    data_dict[[paste0('time24_',time)]]$log_score <-
+      log2(data_dict[[paste0('time24_',time)]]$total_score * 100)
+  }
+  
+  return(data_dict)
+}
+```
+
+```{r}
+lumc_data_dict <- log_transform(lumc_data_dict)
+lumc_data_rev_dict <- log_transform(lumc_data_rev_dict)
+haga_data_dict <- log_transform(haga_data_dict)
+haga_data_rev_dict <- log_transform(haga_data_rev_dict)
+```
+
+```{r}
+densplot_det_score <- function(data_dict, if_log){
+  hospital <- toupper(strsplit(deparse(substitute(data_dict)), '_', 2)[[1]][1])
+  
+  if(grepl('rev', deparse(substitute(data_dict)))){
+    time_order <- '(reverse)'
+  }
+  else{
+    time_order <- '(forwarding)'
+  }
+  
+  time_list <- as.list(seq(0,9,1))
+  
+  data_lst <- list()
+   
+  for(time in time_list){
+    if(if_log == 'no_log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'total_score', 'deteriorate'))
+    }
+    else if(if_log == 'log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'log_score', 'deteriorate'))
+    }
+    
+    colnames(data_sub) <- c('pseudo_id', paste0('time24_',time), 'deteriorate')
+    data_lst[[length(data_lst) + 1]] <- data_sub
+  }
+  data_score <- data_lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+
+  data_score$deteriorate <- as.character(data_score$deteriorate)
+  
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'),
+                         variable.name = 'time', value.name = 'score')
+  
+  if(grepl('rev', deparse(substitute(data_dict)))){
+    densplot<- ggplot(data = data_score, aes(x = score, y = time))+
+      stat_density_ridges(aes(fill = deteriorate))+
+      ggtitle(paste0('4C Deterioration Scores (', if_log, ') - ', hospital, ' ', time_order))+
+      scale_fill_manual(name = 'deteriorate',
+                         values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+      scale_y_discrete(limits = rev)+
+      theme(plot.title = element_text(hjust = 0.5, size = 12), axis.title.x = element_text(size = 8),
+            axis.title.y = element_text(size = 8), legend.key.size = unit(0.6, 'cm'),
+            legend.title = element_text(size=8))
+  }
+  else{
+    densplot<- ggplot(data = data_score, aes(x = score, y = time))+
+      stat_density_ridges(aes(fill = deteriorate))+
+      ggtitle(paste0('4C Deterioration Scores (', if_log,') - ', hospital, ' ', time_order))+
+      scale_fill_manual(name = 'deteriorate',
+                         values=c(color_grps[['no_deteriorate']], color_grps[['deteriorate']]))+
+      theme(plot.title = element_text(hjust = 0.5, size = 12), axis.title.x = element_text(size = 8),
+            axis.title.y = element_text(size = 8), legend.key.size = unit(0.6, 'cm'),
+            legend.title = element_text(size=8))
+  }
+  plot(densplot)
+}
+```
+
+```{r}
+densplot_det_score(lumc_data_dict, 'no_log')
+```
+
+```{r}
+densplot_det_score(lumc_data_dict, 'log')
+```
+
+```{r}
+densplot_det_score(lumc_data_rev_dict, 'no_log')
+```
+
+```{r}
+densplot_det_score(lumc_data_rev_dict, 'log')
+```
+
+```{r}
+densplot_det_score(haga_data_dict, 'no_log')
+```
+
+```{r}
+densplot_det_score(haga_data_dict, 'log')
+```
+
+```{r}
+densplot_det_score(haga_data_rev_dict, 'no_log')
+```
+
+```{r}
+densplot_det_score(haga_data_rev_dict, 'log')
+```
+
+```{r}
+lumc_log_ttest_for <- t_test_forward(lumc_data_dict, 'log')
+lumc_log_ttest_for
+```
+
+```{r}
+haga_log_ttest_for <- t_test_forward(haga_data_dict, 'log')
+haga_log_ttest_for
+```
+
+```{r}
+boxplot_ttest_score_for(lumc_data_dict, 'log')
+```
+
+```{r}
+boxplot_ttest_score_for(haga_data_dict, 'log')
+```
+
+```{r}
+boxplot_lm_score_rev(lumc_data_rev_dict, 'log')
+```
+
+```{r}
+boxplot_lm_score_rev(haga_data_rev_dict, 'log')
+```
+
+```{r}
+time_list <- as.list(seq(0,2,1))
+lst <- list()
+
+for(time in time_list){
+  data_sub <- subset(lumc_data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                        'log_score', 'deteriorate'))
+  
+  colnames(data_sub) <- c('pseudo_id', paste0('time24_',time), 'deteriorate')
+  lst[[length(lst) + 1]] <- data_sub
+}
+
+data_score <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+
+data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'),
+                       variable.name = 'time', value.name = 'score')
+
+data_score$deteriorate <- as.factor(levels(data_score$deteriorate)[data_score$deteriorate])
+
+new_data = data.frame(pseudo_id = character(), deteriorate = character(), time = character(),
+                      score = numeric(), type = character())
+
+for(id in unique(data_score$pseudo_id)){
+  sub = subset(data_score, data_score$pseudo_id == id)
+  if(all(sub$score >= 4.5)){
+    sub$type <-  2
+  }
+  else if(all(sub$score < 4.5)){
+    sub$type <- 0
+  }
+  else{
+    sub$type <- 1
+  }
+  new_data <- rbind(new_data, sub)
+}
+new_data
+```
+
+```{r}
+stratify_patients_forward <- function(data_dict){
+  time_list <- as.list(seq(0,2,1))
+  lst <- list()
+  
+  for(time in time_list){
+    data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'log_score', 'deteriorate'))
+    
+    colnames(data_sub) <- c('pseudo_id', paste0('time24_',time), 'deteriorate')
+    lst[[length(lst) + 1]] <- data_sub
+  }
+  
+  data_score <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+
+  data_score <- melt(data_score, id.vars = c('pseudo_id','deteriorate'),
+                         variable.name = 'time', value.name = 'score')
+  
+  data_score$deteriorate <- as.factor(levels(data_score$deteriorate)[data_score$deteriorate])
+  
+  new_data = data.frame(pseudo_id = character(), deteriorate = character(), time = character(),
+                      score = numeric(), type = numeric(), stringsAsFactors = F)
+  
+  for(id in unique(data_score$pseudo_id)){
+    sub = subset(data_score, data_score$pseudo_id == id)
+    if(all(sub$score >= 4.5)){
+      sub$type <-  2
+    }
+    else if(all(sub$score < 4.5)){
+      sub$type <- 0
+    }
+    else{
+      sub$type <- 1
+    }
+    new_data <- rbind(new_data, sub)
+  }
+  new_data <- subset(new_data, new_data$type != 1)
+  
+  return(new_data)
+}
+```
+
+```{r}
+lumc_stratify_patients <- stratify_patients_forward(lumc_data_dict)
+lumc_stratify_patients
+```
+
+```{r}
+haga_stratify_patients <- stratify_patients_forward(haga_data_dict)
+haga_stratify_patients
+```
+
+```{r}
+opt_cutpoint_new <- function(stratified_data){
+  cp <- cutpointr(stratified_data, type, deteriorate, pos_class = '1', 
+                  neg_class = '0', direction = '>=', method = maximize_metric, metric = F1_score)
+  
+  print(summary(cp))
+  plot(cp)
+  plot_metric(cp)
+}
+```
+
+```{r}
+opt_cutpoint_new(lumc_stratify_patients)
+```
+
+```{r}
+opt_cutpoint_new(haga_stratify_patients)
+```
+
+```{r}
+patients_compare_t <- function(data_dict, if_log){
+  time_list <- as.list(seq(0,9,1))
+  lst <- list()
+  
+  for(time in time_list){
+    if(if_log == 'no_log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'deteriorate', 'total_score'))
+    }
+    else if(if_log == 'log'){
+      data_sub <- subset(data_dict[[paste0('time24_',time)]], select = c('pseudo_id',
+                                                          'deteriorate', 'log_score'))
+    }
+  
+    colnames(data_sub) <- c('pseudo_id', 'deteriorate', paste0('time24_',time))
+    lst[[length(lst) + 1]] <- data_sub
+  }
+  
+  new_data <- lst %>%  reduce(inner_join, by = c("pseudo_id", 'deteriorate'))
+  
+  # new_data$time24_0_1 <-new_data$time24_0 * new_data$time24_1
+  # new_data$time24_0_2 <-new_data$time24_0 * new_data$time24_2
+  # new_data$time24_1_2 <-new_data$time24_1 * new_data$time24_2
+  # new_data$time24_0_1_2 <-new_data$time24_0 * new_data$time24_1 * new_data$time24_2
+  
+  return(new_data)
+}
+```
+
+```{r}
+lumc_no_log_for <- patients_compare_t(lumc_data_dict, 'no_log')
+lumc_no_log_for
+```
+
+```{r}
+# lumc_log_for <- patients_compare_t(lumc_data_dict, 'log')
+# lumc_log_for
+```
+
+```{r}
+haga_no_log_for <- patients_compare_t(haga_data_dict, 'no_log')
+haga_no_log_for
+```
+
+```{r}
+# haga_log_for <- patients_compare_t(haga_data_dict, 'log')
+# haga_log_for
+```
+
+```{r}
+lumc_no_log_rev <- patients_compare_t(lumc_data_rev_dict, 'no_log')
+lumc_no_log_rev 
+```
+
+```{r}
+haga_no_log_rev <- patients_compare_t(haga_data_rev_dict, 'no_log')
+haga_no_log_rev 
+```
+
+```{r}
+opt_cutpoint_compare_t <- function(compare_data, column){
+  sub <- subset(compare_data, select = c('pseudo_id', column, 'deteriorate'))
+  colnames(sub) <- c('pseudo_id', 'score', 'deteriorate')
+  
+  cp <- cutpointr(sub, score, deteriorate, pos_class = '1',
+                  neg_class = '0', direction = '>=', method = maximize_metric, metric = F1_score)
+
+  print(summary(cp))
+  plot(cp)
+  plot_metric(cp)
+  
+}
+```
+
+```{r}
+lumc_no_log_for
+# lumc_no_log_for$pseudo_id
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_0')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_1')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_2')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_3')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_4')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_5')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_6')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_7')
+```
+ 
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_8')
+```
+
+```{r}
+opt_cutpoint_compare_t(haga_no_log_for, 'time24_9')
+```
+
+```{r}
+# Cstat(lumc_data_dict[['time24_0']]$total_score, lumc_data_dict[['time24_0']]$deteriorate)
+```
+
